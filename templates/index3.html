@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Wafer Defect Detector</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #101010;
+      color: white;
+      margin: 40px auto;
+      max-width: 800px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #4CAF50;
+    }
+
+    form {
+      background: #1a1a1a;
+      padding: 20px;
+      border-radius: 10px;
+      border: 1px solid #444;
+    }
+
+    label, input, button {
+      display: block;
+      width: 100%;
+      margin-bottom: 15px;
+    }
+
+    input[type="file"] {
+      padding: 10px;
+      background: #2a2a2a;
+      color: white;
+      border: 1px solid #333;
+    }
+
+    button {
+      padding: 12px;
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      font-size: 16px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    .result {
+      margin-top: 20px;
+      background: #1e1e1e;
+      padding: 15px;
+      border-radius: 10px;
+      border: 1px solid #333;
+    }
+
+    img {
+      max-width: 100%;
+      margin-top: 15px;
+      border-radius: 10px;
+      border: 1px solid #555;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Wafer Defect Detector</h1>
+
+  <div style="text-align: center; margin-bottom: 20px;">
+    <a href="{{ url_for('index') }}" style="display: inline-block; padding: 10px 20px; background-color: #333; color: white; text-decoration: none; border-radius: 5px; margin-right: 10px;">Back to Home</a>
+  </div>
+
+  <form id="wafer-form" enctype="multipart/form-data">
+    <label for="file">Upload Wafer CSV File:</label>
+    <input type="file" name="file" id="file" accept=".csv" required>
+    <button type="submit">Analyze</button>
+    <p style="margin-top: 10px; color: #4CAF50; font-style: italic;">All files are automatically uploaded to S3</p>
+  </form>
+
+  <div id="result" class="result" style="display:none;">
+    <h3>Prediction Result</h3>
+    <p id="result-text"></p>
+
+    <div style="margin-bottom: 20px;">
+      <h4>Probability Distribution</h4>
+      <img id="chart-img" src="" alt="Probability Chart" style="max-width: 100%; border-radius: 5px;">
+    </div>
+
+    <div style="margin-bottom: 20px;">
+      <h4>Wafer Visualization</h4>
+      <img id="wafer-img" src="" alt="Wafer Visualization" style="max-width: 100%; border-radius: 5px;">
+    </div>
+
+    <form id="feedback-form">
+      <label>Was this prediction helpful?</label>
+      <button type="button" onclick="sendFeedback('yes')">Yes</button>
+      <button type="button" onclick="sendFeedback('no')">No</button>
+    </form>
+    <p id="feedback-response"></p>
+  </div>
+
+  <script>
+    const form = document.getElementById('wafer-form');
+    const resultDiv = document.getElementById('result');
+    const resultText = document.getElementById('result-text');
+    const chartImg = document.getElementById('chart-img');
+    const waferImg = document.getElementById('wafer-img');
+    const feedbackResponse = document.getElementById('feedback-response');
+
+    let currentImageName = "";
+    let currentDefectType = "";
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+      const fileInput = document.getElementById('file');
+      currentImageName = fileInput.files[0].name;
+
+      const response = await fetch('/wafer/process_wafer', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        alert(data.error);
+      } else {
+        resultDiv.style.display = 'block';
+        resultText.innerText = `${data.result} | Confidence: ${(data.confidence * 100).toFixed(2)}% | Time: ${data.timestamp}`;
+        chartImg.src = data.chart_image_url;
+        waferImg.src = data.wafer_image_url;
+        currentDefectType = data.defect_type;
+      }
+    });
+
+    function sendFeedback(value) {
+      const fd = new FormData();
+      fd.append('feedback', value);
+      fd.append('original_image', currentImageName);
+      fd.append('defect_type', currentDefectType);
+
+      fetch('/wafer/submit_feedback', {
+        method: 'POST',
+        body: fd
+      }).then(res => res.json())
+        .then(data => {
+          feedbackResponse.innerText = data.message;
+        });
+    }
+  </script>
+
+</body>
+</html>
